@@ -66,11 +66,208 @@ First, we need to build the `C++ shared libraries`_ that the JNI bindings will u
 We can build these manually or we can use `Archery`_ to build them using a Docker container
 (This will require installing Docker, Docker Compose, and Archery).
 
+.. note::
+   If you are building on Apple Silicon, be sure to use a JDK version that was compiled
+   for that architecture. See, for example, the `Azul JDK <https://www.azul.com/downloads/?os=macos&architecture=arm-64-bit&package=jdk>`_.
+
+   If you are building on Windows OS, see :ref:`Developing on Windows <developers-cpp-windows>`.
+
+Maven
+~~~~~
+
+- To build only the JNI C Data Interface library (MacOS / Linux):
+
+    .. code-block::
+
+        $ cd arrow/java
+        $ export JAVA_HOME=<absolute path to your java home>
+        $ java --version
+        $ mvn generate-resources -Pgenerate-libs-cdata-all-os -N
+        $ ls -latr ../java-dist/lib/<your system's architecture>
+        |__ libarrow_cdata_jni.dylib
+        |__ libarrow_cdata_jni.so
+
+- To build only the JNI C Data Interface library (Windows):
+
+    .. code-block::
+
+        $ cd arrow/java
+        $ mvn generate-resources -Pgenerate-libs-cdata-all-os -N
+        $ dir "../java-dist/bin/x86_64"
+        |__ arrow_cdata_jni.dll
+
+- To build all JNI libraries (MacOS / Linux) except the JNI C Data Interface library:
+
+    .. code-block::
+
+        $ cd arrow/java
+        $ export JAVA_HOME=<absolute path to your java home>
+        $ java --version
+        $ mvn generate-resources -Pgenerate-libs-jni-macos-linux -N
+        $ ls -latr java-dist/lib/<your system's architecture>/*_{jni,java}.*
+        |__ libarrow_dataset_jni.dylib
+        |__ libarrow_orc_jni.dylib
+        |__ libgandiva_jni.dylib
+        |__ libplasma_java.dylib
+
+- To build all JNI libraries (Windows) except the JNI C Data Interface library:
+
+    .. code-block::
+
+        $ cd arrow/java
+        $ mvn generate-resources -Pgenerate-libs-jni-windows -N
+        $ dir "../java-dist/bin/x86_64"
+        |__ arrow_dataset_jni.dll
+
+CMake
+~~~~~
+
+- To build only the JNI C Data Interface library (MacOS / Linux):
+
+    .. code-block::
+
+        $ cd arrow
+        $ mkdir -p java-dist java-cdata
+        $ cmake \
+            -S java \
+            -B java-cdata \
+            -DARROW_JAVA_JNI_ENABLE_C=ON \
+            -DARROW_JAVA_JNI_ENABLE_DEFAULT=OFF \
+            -DBUILD_TESTING=OFF \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_LIBDIR=lib/<your system's architecture> \
+            -DCMAKE_INSTALL_PREFIX=java-dist
+        $ cmake --build java-cdata --target install --config Release
+        $ ls -latr java-dist/lib
+        |__ libarrow_cdata_jni.dylib
+        |__ libarrow_cdata_jni.so
+
+- To build only the JNI C Data Interface library (Windows):
+
+    .. code-block::
+
+        $ cd arrow
+        $ mkdir java-dist, java-cdata
+        $ cmake ^
+            -S java ^
+            -B java-cdata ^
+            -DARROW_JAVA_JNI_ENABLE_C=ON ^
+            -DARROW_JAVA_JNI_ENABLE_DEFAULT=OFF ^
+            -DBUILD_TESTING=OFF ^
+            -DCMAKE_BUILD_TYPE=Release ^
+            -DCMAKE_INSTALL_LIBDIR=lib/x86_64 ^
+            -DCMAKE_INSTALL_PREFIX=java-dist
+        $ cmake --build java-cdata --target install --config Release
+        $ dir "java-dist/bin"
+        |__ arrow_cdata_jni.dll
+
+- To build all JNI libraries (MacOS / Linux) except the JNI C Data Interface library:
+
+    .. code-block::
+
+        $ cd arrow
+        $ brew bundle --file=cpp/Brewfile
+        Homebrew Bundle complete! 25 Brewfile dependencies now installed.
+        $ brew uninstall aws-sdk-cpp
+        (We can't use aws-sdk-cpp installed by Homebrew because it has
+        an issue: https://github.com/aws/aws-sdk-cpp/issues/1809 )
+        $ export JAVA_HOME=<absolute path to your java home>
+        $ mkdir -p java-dist cpp-jni
+        $ cmake \
+            -S cpp \
+            -B cpp-jni \
+            -DARROW_BUILD_SHARED=OFF \
+            -DARROW_CSV=ON \
+            -DARROW_DATASET=ON \
+            -DARROW_DEPENDENCY_SOURCE=BUNDLED \
+            -DARROW_DEPENDENCY_USE_SHARED=OFF \
+            -DARROW_FILESYSTEM=ON \
+            -DARROW_GANDIVA=ON \
+            -DARROW_GANDIVA_STATIC_LIBSTDCPP=ON \
+            -DARROW_ORC=ON \
+            -DARROW_PARQUET=ON \
+            -DARROW_PLASMA=ON \
+            -DARROW_S3=ON \
+            -DARROW_USE_CCACHE=ON \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_LIBDIR=lib/<your system's architecture> \
+            -DCMAKE_INSTALL_PREFIX=java-dist \
+            -DCMAKE_UNITY_BUILD=ON
+        $ cmake --build cpp-jni --target install --config Release
+        $ cmake \
+            -S java \
+            -B java-jni \
+            -DARROW_JAVA_JNI_ENABLE_C=OFF \
+            -DARROW_JAVA_JNI_ENABLE_DEFAULT=ON \
+            -DBUILD_TESTING=OFF \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_LIBDIR=lib/<your system's architecture> \
+            -DCMAKE_INSTALL_PREFIX=java-dist \
+            -DCMAKE_PREFIX_PATH=$PWD/java-dist
+        $ cmake --build java-jni --target install --config Release
+        $ ls -latr java-dist/lib/<your system's architecture>/*_{jni,java}.*
+        |__ libarrow_dataset_jni.dylib
+        |__ libarrow_orc_jni.dylib
+        |__ libgandiva_jni.dylib
+        |__ libplasma_java.dylib
+
+- To build all JNI libraries (Windows) except the JNI C Data Interface library
+  (Please note: Plasma and ORC are not available on Windows):
+
+    .. code-block::
+
+        $ cd arrow
+        $ mkdir java-dist, cpp-jni
+        $ cmake ^
+            -S cpp ^
+            -B cpp-jni ^
+            -DARROW_BUILD_SHARED=OFF ^
+            -DARROW_CSV=ON ^
+            -DARROW_DATASET=ON ^
+            -DARROW_DEPENDENCY_USE_SHARED=OFF ^
+            -DARROW_FILESYSTEM=ON ^
+            -DARROW_ORC=OFF ^
+            -DARROW_PARQUET=ON ^
+            -DARROW_S3=ON ^
+            -DARROW_USE_CCACHE=ON ^
+            -DARROW_WITH_BROTLI=ON ^
+            -DARROW_WITH_LZ4=ON ^
+            -DARROW_WITH_SNAPPY=ON ^
+            -DARROW_WITH_ZLIB=ON ^
+            -DARROW_WITH_ZSTD=ON ^
+            -DCMAKE_BUILD_TYPE=Release ^
+            -DCMAKE_INSTALL_LIBDIR=lib/x86_64 ^
+            -DCMAKE_INSTALL_PREFIX=java-dist ^
+            -DCMAKE_UNITY_BUILD=ON ^
+            -GNinja
+        $ cd cpp-jni
+        $ ninja install
+        $ cd ../
+        $ cmake ^
+            -S java ^
+            -B java-jni ^
+            -DARROW_JAVA_JNI_ENABLE_C=OFF ^
+            -DARROW_JAVA_JNI_ENABLE_DEFAULT=ON ^
+            -DARROW_JAVA_JNI_ENABLE_GANDIVA=OFF ^
+            -DARROW_JAVA_JNI_ENABLE_ORC=OFF ^
+            -DARROW_JAVA_JNI_ENABLE_PLASMA=OFF ^
+            -DBUILD_TESTING=OFF ^
+            -DCMAKE_BUILD_TYPE=Release ^
+            -DCMAKE_INSTALL_LIBDIR=lib/x86_64 ^
+            -DCMAKE_INSTALL_PREFIX=java-dist ^
+            -DCMAKE_PREFIX_PATH=$PWD/java-dist
+        $ cmake --build java-jni --target install --config Release
+        $ dir "java-dist/bin"
+        |__ arrow_dataset_jni.dll
+
+Archery
+~~~~~~~
+
 .. code-block::
 
     $ cd arrow
     $ archery docker run java-jni-manylinux-2014
-    $ ls -latr java-dist/
+    $ ls -latr java-dist/<your system's architecture>/
     |__ libarrow_cdata_jni.so
     |__ libarrow_dataset_jni.so
     |__ libarrow_orc_jni.so
